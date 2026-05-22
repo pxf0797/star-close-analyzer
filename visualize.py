@@ -148,9 +148,11 @@ def plot_analysis(
     fig.text(0.5, 0.01, stats_text, ha="center", fontsize=9,
              bbox=dict(boxstyle="round,pad=0.5", facecolor="#f8f9fa", edgecolor="#dee2e6"))
 
-    fig.savefig(save_path, dpi=150, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
-    return save_path
+    if save_path:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        return save_path
+    return fig
 
 
 def plot_trajectory_detail(prices: np.ndarray, entry_idx: int, save_path: str = "trajectory_detail.png"):
@@ -196,6 +198,8 @@ def plot_trajectory_detail(prices: np.ndarray, entry_idx: int, save_path: str = 
         ax2.grid(True, alpha=0.2)
 
     fig.tight_layout()
-    fig.savefig(save_path, dpi=150, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
-    return save_path
+    if save_path:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        return save_path
+    return fig
