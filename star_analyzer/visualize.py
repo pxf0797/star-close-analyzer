@@ -14,7 +14,9 @@ from star_analyzer.backtest import BacktestResult, TickRecord
 from star_analyzer.trajectory import fit_cubic_trajectory, find_theoretical_take_profit
 
 
-plt.rcParams["font.family"] = ["Arial Unicode MS", "sans-serif"]
+import platform
+_sys_fonts = ["Arial Unicode MS"] if platform.system() == "Darwin" else ["DejaVu Sans", "WenQuanYi Micro Hei"]
+plt.rcParams["font.family"] = _sys_fonts + ["sans-serif"]
 plt.rcParams["axes.unicode_minus"] = False
 
 

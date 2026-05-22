@@ -23,19 +23,7 @@ from star_analyzer.closing import (
 )
 from star_analyzer.backtest import BacktestEngine, BacktestResult
 from star_analyzer.visualize import plot_analysis, plot_trajectory_detail
-
-
-def generate_demo_data(n: int = 500) -> np.ndarray:
-    """生成具有涨跌周期的合成价格数据用于演示"""
-    np.random.seed(42)
-    t = np.arange(n, dtype=float)
-    # 多周期叠加
-    trend1 = 100 + 10 * np.sin(2 * np.pi * t / 200)
-    trend2 = 5 * np.sin(2 * np.pi * t / 60)
-    trend3 = 2 * np.sin(2 * np.pi * t / 25)
-    noise = np.random.randn(n) * 1.5
-    prices = trend1 + trend2 + trend3 + noise
-    return np.maximum(prices, 1.0)
+from star_analyzer.datasource import SinSource
 
 
 def load_csv(filepath: str, col: str = "close") -> np.ndarray:
@@ -192,7 +180,7 @@ def main():
         prices = load_csv(args.data, args.col)
     else:
         print("🔧 使用合成演示数据")
-        prices = generate_demo_data(500)
+        prices = SinSource(n=500, seed=42).fetch()
 
     print(f"  价格序列长度: {len(prices)}")
     print(f"  范围: [{prices.min():.4f}, {prices.max():.4f}]")

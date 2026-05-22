@@ -63,6 +63,7 @@ class BacktestEngine:
         max_relative_distance: float = 0.05,
         hard_stop_multiplier: float = 2.0,
         short_only: bool = True,
+        bars_per_year: int = 365 * 24,  # 默认 1H K 线: 365天×24小时
     ):
         self.initial_capital = initial_capital
         self.fee_rate = fee_rate
@@ -71,6 +72,7 @@ class BacktestEngine:
         self.max_relative_distance = max_relative_distance
         self.hard_stop_multiplier = hard_stop_multiplier
         self.short_only = short_only
+        self.bars_per_year = bars_per_year
 
     def run(self, prices: np.ndarray, entry_signals: np.ndarray | None = None) -> BacktestResult:
         """
@@ -250,7 +252,7 @@ class BacktestEngine:
 
         eq = np.array(result.equity_curve)
         returns = np.diff(eq) / np.maximum(eq[:-1], 1e-8)
-        sharpe = float(np.mean(returns) / np.std(returns) * np.sqrt(252 * 96)) if len(returns) > 0 and np.std(returns) > 0 else 0
+        sharpe = float(np.mean(returns) / np.std(returns) * np.sqrt(self.bars_per_year)) if len(returns) > 0 and np.std(returns) > 0 else 0
 
         max_drawdown = 0.0
         peak = eq[0]

@@ -334,6 +334,7 @@ class CsvSource(DataSource):
         self.filepath = filepath
         self.col = col
         self._cached_df: pd.DataFrame | None = None
+        self._len: int | None = None
 
     def fetch(self, n: int | None = None) -> np.ndarray:
         df = self.fetch_df()
@@ -348,7 +349,9 @@ class CsvSource(DataSource):
 
     @property
     def meta(self) -> DataMeta:
-        return DataMeta(name=f"CSV: {self.filepath}", length=len(self.fetch_df()), source="csv")
+        if self._len is None:
+            self._len = len(self.fetch_df())
+        return DataMeta(name=f"CSV: {self.filepath}", length=self._len, source="csv")
 
 
 # ═══════════════════════════════════════════════

@@ -51,8 +51,15 @@ if source_name in ("sin", "poly", "gbm"):
     n_bars = st.sidebar.slider("K线数量", 100, 2000, 500, 50)
     seed = st.sidebar.number_input("随机种子", 0, 999, 42)
     source_kwargs = {"n": n_bars, "seed": seed}
-elif source_name in ("kraken", "okx"):
-    source_kwargs = {}
+elif source_name == "kraken":
+    pair = st.sidebar.selectbox("交易对", ["XBTUSD", "XBTEUR", "ETHUSD"], index=0)
+    interval = st.sidebar.selectbox("K线周期", [1, 5, 15, 30, 60, 240, 1440],
+                                     index=4, format_func=lambda x: f"{x}min")
+    source_kwargs = {"pair": pair, "interval": interval}
+elif source_name == "okx":
+    inst_id = st.sidebar.selectbox("交易对", ["BTC-USDT", "BTC-USDC", "ETH-USDT"], index=0)
+    bar = st.sidebar.selectbox("K线周期", ["1m", "5m", "15m", "30m", "1H", "4H", "1D"], index=4)
+    source_kwargs = {"inst_id": inst_id, "bar": bar}
 elif source_name == "coingecko":
     days = st.sidebar.slider("天数", 1, 90, 30)
     source_kwargs = {"days": days}
@@ -75,7 +82,7 @@ capital = st.sidebar.number_input("初始资金", 100, 100000, 1000, 100)
 
 # 单次轨迹分析
 st.sidebar.subheader("单次轨迹分析")
-entry_idx = st.sidebar.number_input("入场 K 线索引", 0, 2000, 0,
+entry_idx = st.sidebar.number_input("入场 K 线索引", 0, 9999, 0,
     help="设为 0 则运行完整回测；设为具体索引则对该点做轨迹拟合分析")
 
 run_btn = st.sidebar.button("▶ 运行分析", type="primary", use_container_width=True)
