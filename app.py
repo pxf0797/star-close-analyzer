@@ -148,6 +148,8 @@ if entry_idx > 0:
             st.code(str(poly), language=None)
             st.metric("f'(0)", f"{poly.deriv(1)(0):.6f}", delta="≈0" if abs(poly.deriv(1)(0)) < 1 else "⚠️ 偏离")
             st.metric("f''(0)", f"{poly.deriv(2)(0):.6f}", delta="<0 ✅" if poly.deriv(2)(0) < 0 else "⚠️ ≥0")
+            st.caption("**V = f'(0)** = 速度/斜率，表示价格变化的初始速率")
+            st.caption("**A = f''(0)** = 加速度/曲率，表示价格变化趋势的弯曲程度（A<0 符合做空预期）")
 
             if tp:
                 profit_pct = (entry_price - tp) / entry_price * 100
@@ -229,6 +231,17 @@ else:
                     c2.metric("动作", r.action)
                     c3.metric("贴合度", f"{r.fit_score:.4f}" if r.fit_score > 0 else "—")
                     c4.metric("方向", r.direction)
+
+                    # 当前 tick 是入场点时展示 V 和 A
+                    if r.action == "open_short":
+                        poly_entry = fit_cubic_trajectory(prices, replay_idx)
+                        if poly_entry is not None:
+                            v_val = poly_entry.deriv(1)(0)
+                            a_val = poly_entry.deriv(2)(0)
+                            st.caption(
+                                f"**V** (速度/斜率) = {v_val:.6f} &nbsp;&nbsp;|&nbsp;&nbsp; "
+                                f"**A** (加速度/曲率) = {a_val:.6f}"
+                            )
 
     with tab3:
         if result.trades:

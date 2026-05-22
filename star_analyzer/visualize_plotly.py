@@ -205,9 +205,12 @@ def build_trajectory_detail_plotly(
     if poly is None:
         return None
 
+    v0 = poly.deriv(1)(0)
+    a0 = poly.deriv(2)(0)
+    entry_price = prices[entry_idx]
     fig = make_subplots(rows=1, cols=2, subplot_titles=(
-        f"Entry at idx={entry_idx}, Price={prices[entry_idx]:.4f}",
-        f"f'(0)={poly.deriv(1)(0):.6f}, f''(0)={poly.deriv(2)(0):.6f}"
+        f"Entry at idx={entry_idx}, Price={entry_price:.4f}",
+        f"V=f'(0)={v0:.6f} (速度/斜率) | A=f''(0)={a0:.6f} (加速度/曲率)"
     ))
 
     half = 15
@@ -259,6 +262,7 @@ def build_trajectory_detail_plotly(
     fig.add_hline(y=0, line_dash="dot", line_color="black", line_width=0.5, row=1, col=2)
     fig.add_vline(x=0, line_dash="dash", line_color="#8e44ad", line_width=0.8, row=1, col=2)
 
+    fig.update_yaxes(range=[entry_price * 0.9, entry_price * 1.1], row=1, col=1)
     fig.update_layout(height=400, template="plotly_white", hovermode="x unified")
     return fig
 
@@ -277,6 +281,24 @@ def build_replay_chart(prices: np.ndarray, result: BacktestResult, current_idx: 
             "信号状态",
         ),
     )
+
+    # 查找当前是否有活跃持仓 → 展示 V 和 A
+    active_va = None
+    for trade in result.trades:
+        if trade.entry_idx <= current_idx < trade.exit_idx:
+            poly_va = fit_cubic_trajectory(prices, trade.entry_idx)
+            if poly_va is not None:
+                v_va = poly_va.deriv(1)(0)
+                a_va = poly_va.deriv(2)(0)
+                active_va = (v_va, a_va, trade.entry_idx)
+            break
+
+    if active_va:
+        v_val, a_val, e_idx = active_va
+        # 在 Panel 3 标题中附加 V/A 信息
+        fig.layout.annotations[-1].update(
+            text=f"信号状态 | V={v_val:.6f} (速度/斜率) A={a_val:.6f} (加速度/曲率) [Entry #{e_idx}]"
+        )
 
     x = np.arange(min(current_idx + 1, len(prices)))
 
@@ -380,6 +402,8 @@ def build_replay_chart(prices: np.ndarray, result: BacktestResult, current_idx: 
                    line_width=1, row=2, col=1)
     fig.add_vline(x=current_idx, line_dash="dot", line_color="#e74c3c",
                    line_width=1, row=3, col=1)
+
+    fig.update_yaxes(range=[prices[current_idx] * 0.95, prices[current_idx] * 1.05], row=1, col=1)
 
     fig.update_layout(
         height=600,

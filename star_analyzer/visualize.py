@@ -179,6 +179,8 @@ def plot_trajectory_detail(prices: np.ndarray, entry_idx: int, save_path: str = 
                          edgecolors="white", linewidth=0.8, label=f"TP: {tp:.4f}")
 
     ax1.set_title(f"Entry at idx={entry_idx}, Price={prices[entry_idx]:.4f}", fontsize=11, fontweight="bold")
+    entry_price_viz = prices[entry_idx]
+    ax1.set_ylim(entry_price_viz * 0.9, entry_price_viz * 1.1)
     ax1.legend(fontsize=8)
     ax1.grid(True, alpha=0.2)
 
