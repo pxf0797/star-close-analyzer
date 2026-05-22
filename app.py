@@ -3,7 +3,6 @@
 """
 
 import sys
-import time
 import numpy as np
 import streamlit as st
 
@@ -127,7 +126,7 @@ if entry_idx > 0:
         if chart_engine == "plotly":
             fig_plotly = build_trajectory_detail_plotly(prices, entry_idx)
             if fig_plotly:
-                st.plotly_chart(fig_plotly, use_container_width=True)
+                st.plotly_chart(fig_plotly, width='stretch')
             else:
                 st.error("轨迹拟合失败")
         else:
@@ -189,7 +188,7 @@ else:
     with tab1:
         if chart_engine == "plotly":
             fig_interactive = build_interactive_chart(prices, result)
-            st.plotly_chart(fig_interactive, use_container_width=True)
+            st.plotly_chart(fig_interactive, width='stretch')
         else:
             fig_main = plot_analysis(prices, result, save_path="", title="星空策略 · 轨迹冻结平仓分析")
             st.pyplot(fig_main)
@@ -201,57 +200,41 @@ else:
             st.info("无回测记录")
         else:
             max_idx = len(prices) - 1
-            col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([2, 1, 1])
-            with col_ctrl1:
-                replay_idx = st.slider("K 线索引", 0, max_idx, 0, 1, key="replay_slider")
-            with col_ctrl2:
-                auto_play = st.checkbox("自动播放", value=False, key="auto_play")
-            with col_ctrl3:
-                speed = st.select_slider("速度", options=["0.5x", "1x", "2x", "4x"], value="1x")
+            replay_idx = st.slider("K 线索引", 0, max_idx, 0, 1, key="replay_slider")
 
-            if auto_play:
-                if "replay_frame" not in st.session_state:
-                    st.session_state.replay_frame = 0
+            fig_rp = build_replay_chart(prices, result, replay_idx)
+            st.plotly_chart(fig_rp, width='stretch')
 
-                frame = st.session_state.replay_frame
-                step = max(1, max_idx // 300)
-                speed_map = {"0.5x": 1.0, "1x": 0.5, "2x": 0.25, "4x": 0.12}
+            # 当前 tick 的状态摘要
+            rec_at_tick = [r for r in result.records if r.idx == replay_idx]
+            if rec_at_tick:
+                r = rec_at_tick[0]
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("价格", f"${r.price:.2f}")
+                c2.metric("动作", r.action)
+                c3.metric("贴合度", f"{r.fit_score:.4f}" if r.fit_score > 0 else "—")
+                c4.metric("方向", r.direction)
 
-                fig_rp = build_replay_chart(prices, result, frame)
-                st.plotly_chart(fig_rp, use_container_width=True)
-                st.progress(frame / max_idx, text=f"frame {frame}/{max_idx}")
-
-                if frame < max_idx:
-                    st.session_state.replay_frame = min(frame + step, max_idx)
-                    time.sleep(speed_map[speed])
-                    st.rerun()
+            # 若当前 tick 在某笔交易持仓期内，展示该 entry 的 V 和 A
+            active_trade = None
+            for t in result.trades:
+                if t.entry_idx <= replay_idx <= t.exit_idx:
+                    active_trade = t
+                    break
+            if active_trade is not None:
+                poly_entry = fit_cubic_trajectory(prices, active_trade.entry_idx)
+                if poly_entry is not None:
+                    v_val = poly_entry.deriv(1)(0)
+                    a_val = poly_entry.deriv(2)(0)
+                    c5, c6 = st.columns(2)
+                    c5.metric("V (速度)", f"{v_val:.4f}",
+                              delta="≈0 ✅" if abs(v_val) < 1 else "偏大 ⚠️",
+                              help="f'(0) — 入场时刻的瞬时价格变化速率，≈0 表示处于极值点")
+                    c6.metric("A (加速度)", f"{a_val:.4f}",
+                              delta="<0 ✅" if a_val < 0 else "≥0 ⚠️",
+                              help="f''(0) — 入场时刻的曲率，<0 表示局部极大（符合做空预期）")
                 else:
-                    st.session_state.replay_frame = 0
-                    st.success("回放完成")
-            else:
-                fig_rp = build_replay_chart(prices, result, replay_idx)
-                st.plotly_chart(fig_rp, use_container_width=True)
-
-                # 当前 tick 的状态摘要
-                rec_at_tick = [r for r in result.records if r.idx == replay_idx]
-                if rec_at_tick:
-                    r = rec_at_tick[0]
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("价格", f"${r.price:.2f}")
-                    c2.metric("动作", r.action)
-                    c3.metric("贴合度", f"{r.fit_score:.4f}" if r.fit_score > 0 else "—")
-                    c4.metric("方向", r.direction)
-
-                    # 当前 tick 是入场点时展示 V 和 A
-                    if r.action == "open_short":
-                        poly_entry = fit_cubic_trajectory(prices, replay_idx)
-                        if poly_entry is not None:
-                            v_val = poly_entry.deriv(1)(0)
-                            a_val = poly_entry.deriv(2)(0)
-                            st.caption(
-                                f"**V** (速度/斜率) = {v_val:.6f} &nbsp;&nbsp;|&nbsp;&nbsp; "
-                                f"**A** (加速度/曲率) = {a_val:.6f}"
-                            )
+                    st.caption("V/A: 轨迹拟合数据不可用")
 
     with tab3:
         if result.trades:
