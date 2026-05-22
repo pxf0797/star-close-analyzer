@@ -13,15 +13,15 @@ st.set_page_config(
     layout="wide",
 )
 
-from datasource import (
+from star_analyzer.datasource import (
     create_source, SinSource, PolySource, GbmSource,
     KrakenSource, CoinGeckoSource, OkxSource, CsvSource,
 )
-from backtest import BacktestEngine
-from visualize import plot_analysis, plot_trajectory_detail
-from visualize_plotly import build_interactive_chart, build_trajectory_detail_plotly, build_replay_chart
-from trajectory import fit_cubic_trajectory, find_theoretical_take_profit
-from closing import check_profit_threshold
+from star_analyzer.backtest import BacktestEngine
+from star_analyzer.visualize import plot_analysis, plot_trajectory_detail
+from star_analyzer.visualize_plotly import build_interactive_chart, build_trajectory_detail_plotly, build_replay_chart
+from star_analyzer.trajectory import fit_cubic_trajectory, find_theoretical_take_profit
+from star_analyzer.closing import check_profit_threshold
 
 
 # ═══════════════════════════════════════════════

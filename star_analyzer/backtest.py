@@ -6,8 +6,8 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import Any
 
-from trajectory import fit_cubic_trajectory, find_theoretical_take_profit
-from closing import (
+from star_analyzer.trajectory import fit_cubic_trajectory, find_theoretical_take_profit
+from star_analyzer.closing import (
     Action, Direction, PositionState, CloseDecision,
     evaluate_close, check_profit_threshold, compute_fit_score,
 )

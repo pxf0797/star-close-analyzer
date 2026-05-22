@@ -5,8 +5,8 @@ Plotly 交互图表模块 — hover/zoom/框选的 5 面板回测可视化。
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from backtest import BacktestResult
-from trajectory import fit_cubic_trajectory, find_theoretical_take_profit
+from star_analyzer.backtest import BacktestResult
+from star_analyzer.trajectory import fit_cubic_trajectory, find_theoretical_take_profit
 
 
 def build_interactive_chart(
@@ -200,7 +200,6 @@ def build_trajectory_detail_plotly(
     entry_idx: int,
 ) -> go.Figure | None:
     """Plotly 版单次轨迹拟合详情（拟合窗口 + 导数分析）"""
-    from trajectory import fit_cubic_trajectory, find_theoretical_take_profit
 
     poly = fit_cubic_trajectory(prices, entry_idx)
     if poly is None:
@@ -295,7 +294,7 @@ def build_replay_chart(prices: np.ndarray, result: BacktestResult, current_idx: 
     exits_before = [t for t in result.trades if t.exit_idx <= current_idx]
 
     for rec in entries_before:
-        from trajectory import fit_cubic_trajectory
+
         poly = fit_cubic_trajectory(prices, rec.idx)
         if poly is not None:
             t_end = min(len(prices) - rec.idx, current_idx - rec.idx + 20)

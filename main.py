@@ -15,14 +15,14 @@ import time
 import numpy as np
 import pandas as pd
 
-from trajectory import fit_cubic_trajectory, find_theoretical_take_profit
-from closing import (
+from star_analyzer.trajectory import fit_cubic_trajectory, find_theoretical_take_profit
+from star_analyzer.closing import (
     Action, Direction, PositionState, evaluate_close,
     check_profit_threshold, compute_residual, compute_fit_score,
     half_life_decay,
 )
-from backtest import BacktestEngine, BacktestResult
-from visualize import plot_analysis, plot_trajectory_detail
+from star_analyzer.backtest import BacktestEngine, BacktestResult
+from star_analyzer.visualize import plot_analysis, plot_trajectory_detail
 
 
 def generate_demo_data(n: int = 500) -> np.ndarray:

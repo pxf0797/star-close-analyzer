@@ -10,8 +10,8 @@ import matplotlib.dates as mdates
 from matplotlib.patches import FancyBboxPatch
 from typing import Any
 
-from backtest import BacktestResult, TickRecord
-from trajectory import fit_cubic_trajectory, find_theoretical_take_profit
+from star_analyzer.backtest import BacktestResult, TickRecord
+from star_analyzer.trajectory import fit_cubic_trajectory, find_theoretical_take_profit
 
 
 plt.rcParams["font.family"] = ["Arial Unicode MS", "sans-serif"]
