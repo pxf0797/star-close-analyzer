@@ -1,5 +1,5 @@
 """
-星空策略 · 动态回测面板 (Phase 0 — Streamlit)
+星空策略 · 动态回测面板 (Phase 2 — Streamlit + Plotly)
 """
 
 import sys
@@ -19,6 +19,7 @@ from datasource import (
 )
 from backtest import BacktestEngine
 from visualize import plot_analysis, plot_trajectory_detail
+from visualize_plotly import build_interactive_chart, build_trajectory_detail_plotly, build_replay_chart
 from trajectory import fit_cubic_trajectory, find_theoretical_take_profit
 from closing import check_profit_threshold
 
@@ -58,6 +59,9 @@ elif source_name == "coingecko":
 
 # 策略参数
 st.sidebar.subheader("策略参数")
+chart_engine = st.sidebar.radio("图表引擎", ["plotly", "matplotlib"],
+    format_func=lambda x: {"plotly": "📊 Plotly (交互)", "matplotlib": "📈 Matplotlib (静态)"}[x],
+    help="Plotly 支持 hover/zoom/框选；Matplotlib 为原有静态图表")
 half_life = st.sidebar.slider("半衰期 (bar)", 5, 60, 15, 1,
     help="衰减因子半衰期。越小越敏感，越大越宽容")
 confidence = st.sidebar.slider("自信度阈值", 0.10, 0.80, 0.30, 0.05,
@@ -120,10 +124,17 @@ if entry_idx > 0:
     col1, col2 = st.columns([3, 2])
 
     with col1:
-        fig_detail = plot_trajectory_detail(prices, entry_idx, save_path="")
-        st.pyplot(fig_detail)
-        import matplotlib.pyplot as plt
-        plt.close(fig_detail)
+        if chart_engine == "plotly":
+            fig_plotly = build_trajectory_detail_plotly(prices, entry_idx)
+            if fig_plotly:
+                st.plotly_chart(fig_plotly, use_container_width=True)
+            else:
+                st.error("轨迹拟合失败")
+        else:
+            fig_detail = plot_trajectory_detail(prices, entry_idx, save_path="")
+            st.pyplot(fig_detail)
+            import matplotlib.pyplot as plt
+            plt.close(fig_detail)
 
     with col2:
         poly = fit_cubic_trajectory(prices, entry_idx)
@@ -170,37 +181,79 @@ else:
     c6.metric("夏普比", stats["sharpe"])
     c7.metric("耗时", f"{elapsed:.2f}s")
 
-    # 主图表
-    st.subheader("回测分析图")
-    fig_main = plot_analysis(prices, result, save_path="", title="星空策略 · 轨迹冻结平仓分析")
-    st.pyplot(fig_main)
-    import matplotlib.pyplot as plt
-    plt.close(fig_main)
+    # Tab 布局
+    tab1, tab2, tab3 = st.tabs(["📊 回测总览", "⏯️ Tick 回放", "📋 逐笔交易"])
 
-    # 交易详情
-    if result.trades:
-        st.subheader("逐笔交易详情")
-        trade_data = []
-        for i, t in enumerate(result.trades):
-            tag = "✅" if t.pnl > 0 else "❌"
-            trade_data.append({
-                "#": i + 1,
-                "入场": t.entry_idx,
-                "出场": t.exit_idx,
-                "持仓 bar": t.exit_idx - t.entry_idx,
-                "入场价": f"${t.entry_price:.2f}",
-                "出场价": f"${t.exit_price:.2f}",
-                "盈亏": f"{t.pnl_pct:+.2f}%",
-                "原因": t.reason,
-                "结果": tag,
-            })
+    with tab1:
+        if chart_engine == "plotly":
+            fig_interactive = build_interactive_chart(prices, result)
+            st.plotly_chart(fig_interactive, use_container_width=True)
+        else:
+            fig_main = plot_analysis(prices, result, save_path="", title="星空策略 · 轨迹冻结平仓分析")
+            st.pyplot(fig_main)
+            import matplotlib.pyplot as plt
+            plt.close(fig_main)
 
-        import pandas as pd
-        df_trades = pd.DataFrame(trade_data)
-        st.dataframe(df_trades, use_container_width=True, hide_index=True)
+    with tab2:
+        if not result.records:
+            st.info("无回测记录")
+        else:
+            max_idx = len(prices) - 1
+            col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([2, 1, 1])
+            with col_ctrl1:
+                replay_idx = st.slider("K 线索引", 0, max_idx, 0, 1, key="replay_slider")
+            with col_ctrl2:
+                auto_play = st.checkbox("自动播放", value=False, key="auto_play")
+            with col_ctrl3:
+                speed = st.select_slider("速度", options=["0.5x", "1x", "2x", "4x"], value="1x")
 
-        # 各平仓原因统计
-        reasons = {}
-        for t in result.trades:
-            reasons[t.reason] = reasons.get(t.reason, 0) + 1
-        st.caption("平仓原因分布: " + " | ".join(f"{k}: {v}" for k, v in reasons.items()))
+            if auto_play:
+                speed_map = {"0.5x": 1.0, "1x": 0.5, "2x": 0.25, "4x": 0.12}
+                delay = speed_map[speed]
+                placeholder = st.empty()
+                for idx in range(0, max_idx + 1, max(1, max_idx // 300)):
+                    fig_rp = build_replay_chart(prices, result, idx)
+                    placeholder.plotly_chart(fig_rp, use_container_width=True)
+                    time.sleep(delay)
+                st.success("回放完成")
+            else:
+                fig_rp = build_replay_chart(prices, result, replay_idx)
+                st.plotly_chart(fig_rp, use_container_width=True)
+
+                # 当前 tick 的状态摘要
+                rec_at_tick = [r for r in result.records if r.idx == replay_idx]
+                if rec_at_tick:
+                    r = rec_at_tick[0]
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("价格", f"${r.price:.2f}")
+                    c2.metric("动作", r.action)
+                    c3.metric("贴合度", f"{r.fit_score:.4f}" if r.fit_score > 0 else "—")
+                    c4.metric("方向", r.direction)
+
+    with tab3:
+        if result.trades:
+            trade_data = []
+            for i, t in enumerate(result.trades):
+                tag = "✅" if t.pnl > 0 else "❌"
+                trade_data.append({
+                    "#": i + 1,
+                    "入场": t.entry_idx,
+                    "出场": t.exit_idx,
+                    "持仓 bar": t.exit_idx - t.entry_idx,
+                    "入场价": f"${t.entry_price:.2f}",
+                    "出场价": f"${t.exit_price:.2f}",
+                    "盈亏": f"{t.pnl_pct:+.2f}%",
+                    "原因": t.reason,
+                    "结果": tag,
+                })
+
+            import pandas as pd
+            df_trades = pd.DataFrame(trade_data)
+            st.dataframe(df_trades, use_container_width=True, hide_index=True)
+
+            reasons = {}
+            for t in result.trades:
+                reasons[t.reason] = reasons.get(t.reason, 0) + 1
+            st.caption("平仓原因分布: " + " | ".join(f"{k}: {v}" for k, v in reasons.items()))
+        else:
+            st.info("无交易记录")
