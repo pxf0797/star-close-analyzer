@@ -60,12 +60,13 @@ class SinSource(DataSource):
     def fetch_df(self, n: int | None = None) -> pd.DataFrame:
         n = n or self.n
         prices = self.fetch(n)
+        rng = np.random.RandomState(self.seed + 1)  # +1 避免与 fetch 共用相同种子序列
         df = pd.DataFrame({"timestamp": pd.date_range("2026-01-01", periods=n, freq="1h"),
                            "close": prices})
-        df["open"] = df["close"] * (1 + np.random.randn(n) * 0.001)
-        df["high"] = df[["open", "close"]].max(axis=1) * (1 + np.abs(np.random.randn(n) * 0.002))
-        df["low"] = df[["open", "close"]].min(axis=1) * (1 - np.abs(np.random.randn(n) * 0.002))
-        df["volume"] = np.random.rand(n) * 100
+        df["open"] = df["close"] * (1 + rng.randn(n) * 0.001)
+        df["high"] = df[["open", "close"]].max(axis=1) * (1 + np.abs(rng.randn(n) * 0.002))
+        df["low"] = df[["open", "close"]].min(axis=1) * (1 - np.abs(rng.randn(n) * 0.002))
+        df["volume"] = rng.rand(n) * 100
         return df
 
     @property
@@ -117,12 +118,13 @@ class PolySource(DataSource):
     def fetch_df(self, n: int | None = None) -> pd.DataFrame:
         n = n or self.n
         prices = self.fetch(n)
+        rng = np.random.RandomState(self.seed + 1)
         df = pd.DataFrame({"timestamp": pd.date_range("2026-01-01", periods=n, freq="1h"),
                            "close": prices})
-        df["open"] = df["close"] * (1 + np.random.randn(n) * 0.001)
+        df["open"] = df["close"] * (1 + rng.randn(n) * 0.001)
         df["high"] = df[["open", "close"]].max(axis=1) * 1.002
         df["low"] = df[["open", "close"]].min(axis=1) * 0.998
-        df["volume"] = np.random.rand(n) * 100
+        df["volume"] = rng.rand(n) * 100
         return df
 
     @property
@@ -152,12 +154,13 @@ class GbmSource(DataSource):
     def fetch_df(self, n: int | None = None) -> pd.DataFrame:
         n = n or self.n
         prices = self.fetch(n)
+        rng = np.random.RandomState(self.seed + 1)
         df = pd.DataFrame({"timestamp": pd.date_range("2026-01-01", periods=n, freq="1h"),
                            "close": prices})
         df["open"] = df["close"].shift(1).fillna(df["close"])
         df["high"] = df[["open", "close"]].max(axis=1) * 1.002
         df["low"] = df[["open", "close"]].min(axis=1) * 0.998
-        df["volume"] = np.random.rand(n) * 100
+        df["volume"] = rng.rand(n) * 100
         return df
 
     @property

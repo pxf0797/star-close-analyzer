@@ -111,7 +111,7 @@ class BacktestEngine:
 
                 if decision.action == Action.MARKET_CLOSE_ALL:
                     pnl = (position.entry_price - price) * trade_qty
-                    pnl_after_fee = pnl - 2 * self.fee_rate * position.entry_price * trade_qty
+                    pnl_after_fee = pnl - self.fee_rate * trade_qty * (position.entry_price + price)
                     equity += pnl_after_fee
                     result.equity_curve.append(equity)
                     result.trades.append(Trade(
@@ -194,7 +194,7 @@ class BacktestEngine:
         if position is not None:
             final_price = float(prices[-1])
             pnl = (position.entry_price - final_price) * trade_qty
-            pnl_after_fee = pnl - 2 * self.fee_rate * position.entry_price * trade_qty
+            pnl_after_fee = pnl - self.fee_rate * trade_qty * (position.entry_price + final_price)
             equity += pnl_after_fee
             result.trades.append(Trade(
                 entry_idx=position.entry_idx,

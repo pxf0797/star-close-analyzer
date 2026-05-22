@@ -210,14 +210,24 @@ else:
                 speed = st.select_slider("速度", options=["0.5x", "1x", "2x", "4x"], value="1x")
 
             if auto_play:
+                if "replay_frame" not in st.session_state:
+                    st.session_state.replay_frame = 0
+
+                frame = st.session_state.replay_frame
+                step = max(1, max_idx // 300)
                 speed_map = {"0.5x": 1.0, "1x": 0.5, "2x": 0.25, "4x": 0.12}
-                delay = speed_map[speed]
-                placeholder = st.empty()
-                for idx in range(0, max_idx + 1, max(1, max_idx // 300)):
-                    fig_rp = build_replay_chart(prices, result, idx)
-                    placeholder.plotly_chart(fig_rp, use_container_width=True)
-                    time.sleep(delay)
-                st.success("回放完成")
+
+                fig_rp = build_replay_chart(prices, result, frame)
+                st.plotly_chart(fig_rp, use_container_width=True)
+                st.progress(frame / max_idx, text=f"frame {frame}/{max_idx}")
+
+                if frame < max_idx:
+                    st.session_state.replay_frame = min(frame + step, max_idx)
+                    time.sleep(speed_map[speed])
+                    st.rerun()
+                else:
+                    st.session_state.replay_frame = 0
+                    st.success("回放完成")
             else:
                 fig_rp = build_replay_chart(prices, result, replay_idx)
                 st.plotly_chart(fig_rp, use_container_width=True)
