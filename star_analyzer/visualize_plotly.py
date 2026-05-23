@@ -39,7 +39,7 @@ def build_interactive_chart(
         vertical_spacing=0.05,
         row_heights=[0.45, 0.30, 0.25],
         subplot_titles=(title, "残差 & 贴合度", "权益曲线"),
-        specs=[[{"secondary_y": False}],
+        specs=[[{"secondary_y": True}],   # 次轴给信号色带
                [{"secondary_y": True}],
                [{"secondary_y": False}]],
     )
@@ -47,31 +47,40 @@ def build_interactive_chart(
     x = np.arange(len(prices))
 
     # ═══════════ Panel 1: 价格 + 轨迹 + 信号色带 ═══════════
-    # 信号背景色带（极细，叠在底部）
     signal_map = {"open_short": 2, "hold": 0, "upsert_protection": 1, "market_close_all": -1}
     signals = np.array([signal_map.get(r.action, 0) for r in result.records])
-    sig_colors = [C_SIGNAL[s] for s in signals]
+    SIG_COLORS = {2: "#8e44ad", 1: "#3498db", 0: "rgba(0,0,0,0.02)", -1: "#e74c3c"}
+    SIG_LABEL = {2: "开仓", 1: "保护单", 0: "", -1: "全平"}
 
+    # 信号色带 — 次Y轴，范围 [0,3]，不干扰价格主轴
     fig.add_trace(
-        go.Bar(x=x, y=np.ones(len(x)), marker_color=sig_colors,
+        go.Bar(x=x, y=np.full(len(x), 1.5), marker_color=[SIG_COLORS[s] for s in signals],
                name="Signal", showlegend=False, width=1.0,
+               customdata=[SIG_LABEL[s] for s in signals],
                hovertemplate="idx=%{x}<br>%{customdata}<extra></extra>",
-               customdata=[SIGNAL_LABEL[s] for s in signals],
                marker_line_width=0),
-        row=1, col=1,
+        row=1, col=1, secondary_y=True,
     )
+    fig.update_yaxes(range=[0, 3], showticklabels=False, row=1, col=1, secondary_y=True)
 
-    # 价格线
+    # 关键信号竖线标记
+    for r in result.records:
+        if r.action == "open_short":
+            fig.add_vline(x=r.idx, line_dash="dot", line_color=C_TRAJ, line_width=0.5, opacity=0.5, row=1, col=1)
+        elif r.action == "market_close_all":
+            fig.add_vline(x=r.idx, line_dash="dot", line_color=C_LOSS, line_width=0.5, opacity=0.5, row=1, col=1)
+
+    # 价格线 — 主轴
     fig.add_trace(
         go.Scatter(x=x, y=prices, mode="lines", name="Price",
                    line=dict(color=C_PRICE, width=1.8),
                    hovertemplate="idx=%{x}<br>Price=%{y:.2f}<extra></extra>"),
-        row=1, col=1,
+        row=1, col=1, secondary_y=False,
     )
 
     # 持仓区间着色
     for trade in result.trades:
-        color = "rgba(39,174,96,0.06)" if trade.pnl > 0 else "rgba(231,76,60,0.06)"
+        color = "rgba(39,174,96,0.12)" if trade.pnl > 0 else "rgba(231,76,60,0.12)"
         fig.add_vrect(x0=trade.entry_idx, x1=trade.exit_idx, fillcolor=color,
                        layer="below", line_width=0, row=1, col=1)
 
@@ -154,34 +163,38 @@ def build_interactive_chart(
     fig.update_yaxes(title_text="残差", row=2, col=1, secondary_y=False)
     fig.update_yaxes(title_text="贴合度", range=[-0.05, 1.1], row=2, col=1, secondary_y=True)
 
-    # ═══════════ Panel 3: 权益曲线 ═══════════
+    # ═══════════ Panel 3: 权益曲线 (百分比) ═══════════
     equity = np.array(result.equity_curve)
+    eq0 = result.equity_curve[0]
+    eq_pct = (equity - eq0) / eq0 * 100
     eq_x = np.arange(len(equity)) / len(prices) * 100
     fig.add_trace(
-        go.Scatter(x=eq_x, y=equity, mode="lines", name="Equity",
+        go.Scatter(x=eq_x, y=eq_pct, mode="lines", name="收益%",
                    line=dict(color=C_EQUITY, width=1.5),
                    fill="tozeroy", fillcolor=C_EQUITY_BG,
-                   hovertemplate="进度=%{x:.1f}%<br>Equity=%{y:.2f}<extra></extra>"),
+                   hovertemplate="进度=%{x:.1f}%<br>收益=%{y:.2f}%<extra></extra>"),
         row=3, col=1,
     )
-    fig.add_hline(y=result.equity_curve[0], line_dash="dot", line_color="gray",
+    fig.add_hline(y=0, line_dash="dot", line_color="gray",
                    line_width=0.5, row=3, col=1)
 
-    # 权益曲线上标记交易起止
-    for trade in result.trades:
+    # 标记交易出场
+    for ti, trade in enumerate(result.trades):
         ex = (trade.exit_idx / len(prices)) * 100
+        ey = eq_pct[min(ti + 1, len(eq_pct) - 1)]
         clr = C_WIN if trade.pnl > 0 else C_LOSS
         fig.add_trace(go.Scatter(
-            x=[ex], y=[result.equity_curve[0]], mode="markers",
-            marker=dict(symbol="line-ns", size=8, color=clr, line=dict(width=1)),
-            showlegend=False, hovertemplate="Exit #%{x}<extra></extra>",
+            x=[ex], y=[ey], mode="markers",
+            marker=dict(symbol="triangle-down" if trade.pnl > 0 else "triangle-up",
+                        size=8, color=clr, line=dict(width=1, color="white")),
+            showlegend=False, hovertemplate=f"Exit #{trade.entry_idx}<br>{trade.pnl_pct:+.2f}%<extra></extra>",
         ), row=3, col=1)
 
     # Layout
     fig.update_xaxes(title_text="K 线索引", row=2, col=1)
     fig.update_xaxes(title_text="进度 %", row=3, col=1)
-    fig.update_yaxes(title_text="Price", row=1, col=1)
-    fig.update_yaxes(title_text="Equity", row=3, col=1)
+    fig.update_yaxes(title_text="Price", tickprefix="$", row=1, col=1)
+    fig.update_yaxes(title_text="收益 %", ticksuffix="%", row=3, col=1)
 
     fig.update_layout(
         height=750,
