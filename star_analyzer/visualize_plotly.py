@@ -46,13 +46,12 @@ def build_interactive_chart(
     )
 
     x = np.arange(len(prices))
-    avg_price = float(np.mean(prices))
+    sig_y = float(np.max(prices)) * 1.01  # 信号标记在最高价上方1%，永不遮挡
 
     # ═══════════ Panel 1: 价格(红线) + 轨迹 + 信号标记 ═══════════
-    # 信号标记 — 用散点标在均价线位置
     sig_events = [r for r in result.records if r.action in ("open_short", "upsert_protection", "market_close_all")]
     for action_type in ["open_short", "upsert_protection", "market_close_all"]:
-        pts = [(r.idx, avg_price) for r in sig_events if r.action == action_type]
+        pts = [(r.idx, sig_y) for r in sig_events if r.action == action_type]
         if pts:
             xs, ys = zip(*pts)
             fig.add_trace(go.Scatter(
