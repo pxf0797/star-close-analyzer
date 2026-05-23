@@ -146,6 +146,8 @@ chart_engine = st.sidebar.radio("图表引擎", ["plotly", "matplotlib"],
 fitter_name = st.sidebar.selectbox("拟合器", ["cubic_wls", "ensemble"],
     format_func=lambda x: {"cubic_wls": "WLS 三次 (Phase A)", "ensemble": "多模型集成 (Phase B)"}[x],
     help="cubic_wls: WLS + 解析 f'(0)=0 + CV 门控。ensemble: WLS+ElasticNet+均值回复+GPR 集成")
+q_score_threshold = st.sidebar.slider("Q-Score 最低开仓阈值", 0.0, 1.0, 0.5, 0.05,
+    help="Phase C 质量门控：Q<阈值则拒绝开仓。0=关闭门控")
 half_life = st.sidebar.slider("半衰期 (bar)", 5, 60, 15, 1,
     help="衰减因子半衰期。越小越敏感，越大越宽容")
 confidence = st.sidebar.slider("自信度阈值", 0.10, 0.80, 0.30, 0.05,
@@ -266,6 +268,7 @@ else:
             max_relative_distance=max_distance,
             hard_stop_multiplier=hard_stop_mul,
             fitter=fitter_name,
+            q_score_threshold=q_score_threshold,
         )
         result = engine.run(prices)
         elapsed = time.time() - t0
@@ -281,8 +284,27 @@ else:
     c6.metric("夏普比", stats["sharpe"])
     c7.metric("耗时", f"{elapsed:.2f}s")
 
+    # Phase C: Q-Score 摘要
+    if "q_score_summary" in stats:
+        qs = stats["q_score_summary"]
+        st.caption(
+            f"Q-Score: μ={qs['mean']:.3f} 中位数={qs['median']:.3f} "
+            f"σ={qs['std']:.3f}  |  门控拒绝: {qs['rejected']} 次  "
+            f"|  IC: {stats.get('ic_score', 'N/A')} "
+            f"{'✅ 有效' if stats.get('ic_effective') else ''}"
+        )
+
     # Tab 布局
-    tab1, tab2, tab3 = st.tabs(["📊 回测总览", "⏯️ Tick 回放", "📋 逐笔交易"])
+    tab_names = ["📊 回测总览", "⏯️ Tick 回放", "📋 逐笔交易"]
+    if "quality_bins" in stats:
+        tab_names.append("🔬 质量分档")
+    tabs = st.tabs(tab_names)
+
+    tab1 = tabs[0]
+    tab2 = tabs[1]
+    tab3 = tabs[2]
+    if len(tabs) > 3:
+        tab_quality = tabs[3]
 
     with tab1:
         if chart_engine == "plotly":
@@ -361,3 +383,27 @@ else:
             st.caption("平仓原因分布: " + " | ".join(f"{k}: {v}" for k, v in reasons.items()))
         else:
             st.info("无交易记录")
+
+    if "quality_bins" in stats:
+        with tab_quality:
+            st.subheader("拟合质量分档")
+            bins = stats["quality_bins"]
+            labels = {"high": "🟢 高质量 (Q≥0.75)", "mid": "🟡 中等 (0.50≤Q<0.75)", "low": "🔴 低质量 (Q<0.50)"}
+
+            for label_key in ["high", "mid", "low"]:
+                if label_key in bins:
+                    b = bins[label_key]
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric(labels[label_key], f"{b['count']} 笔")
+                    c2.metric("胜率", f"{b['win_rate']}%")
+                    c3.metric("平均盈亏", f"{b['avg_pnl_pct']}%")
+                    c4.metric("总盈亏", f"{b['total_pnl_pct']}%")
+
+            if "ic_score" in stats:
+                ic = stats["ic_score"]
+                st.metric(
+                    "IC (Information Coefficient)",
+                    f"{ic:.4f}",
+                    delta="✅ Q-Score 有效" if abs(ic) > 0.15 else ("⚠️ 弱有效" if abs(ic) > 0.05 else "❌ 无效"),
+                )
+                st.caption("IC > 0.15 弱有效 | IC > 0.25 强有效 — Spearman 秩相关 (Q-Score vs |PnL|)")

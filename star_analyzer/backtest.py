@@ -20,6 +20,13 @@ except ImportError:
     _HAS_ENSEMBLE = False
     TrajectoryFit = None
 
+# Phase C 质量评估（可选）
+try:
+    from star_analyzer.fitting.quality import evaluate_fit_quality
+    _HAS_QUALITY = True
+except ImportError:
+    _HAS_QUALITY = False
+
 
 @dataclass
 class Trade:
@@ -31,6 +38,8 @@ class Trade:
     reason: str
     pnl: float = 0.0
     pnl_pct: float = 0.0
+    q_score: float | None = None
+    cv_rmse: float | None = None
 
     def __post_init__(self):
         # 做空: 盈利 = (entry - exit) / entry
@@ -74,6 +83,8 @@ class BacktestEngine:
         bars_per_year: int = 365 * 24,
         fitter: str = "cubic_wls",         # "cubic_wls" | "ensemble"
         fitter_kwargs: dict | None = None,
+        track_quality: bool = True,          # Phase C: 启用 Q-Score 追踪
+        q_score_threshold: float = 0.5,      # Q-Score 最低开仓阈值
     ):
         self.initial_capital = initial_capital
         self.fee_rate = fee_rate
@@ -85,6 +96,8 @@ class BacktestEngine:
         self.bars_per_year = bars_per_year
         self.fitter = fitter
         self.fitter_kwargs = fitter_kwargs or {}
+        self.track_quality = track_quality
+        self.q_score_threshold = q_score_threshold
 
     def run(self, prices: np.ndarray, entry_signals: np.ndarray | None = None) -> BacktestResult:
         """
@@ -128,22 +141,42 @@ class BacktestEngine:
                     pnl = (position.entry_price - price) * trade_qty
                     pnl_after_fee = pnl - self.fee_rate * trade_qty * (position.entry_price + price)
                     equity += pnl_after_fee
-                    result.trades.append(Trade(
+                    trade = Trade(
                         entry_idx=position.entry_idx,
                         exit_idx=i,
                         entry_price=position.entry_price,
                         exit_price=price,
                         quantity=trade_qty,
                         reason=decision.reason_code,
-                    ))
+                    )
+                    # Phase C: 传递 Q-Score
+                    if hasattr(position, "_q_score"):
+                        trade.q_score = position._q_score
+                        trade.cv_rmse = position._cv_rmse
+                    result.trades.append(trade)
                     position = None
                     trade_qty = 0.0
                 else:
                     pass
 
             elif entry_signals[i] and position is None:
-                anchor, tp = self._fit_entry(prices, i)
+                anchor, tp, q_result = self._fit_entry(prices, i)
                 if anchor is not None:
+                    # Phase C Q-Score 门控
+                    if self.track_quality and q_result is not None:
+                        if q_result["q_score"] < self.q_score_threshold:
+                            result.records.append(TickRecord(
+                                idx=i,
+                                price=price,
+                                pred_price=price,
+                                fit_score=float(q_result["q_score"]),
+                                residual=0.0,
+                                direction="-",
+                                action="hold",
+                                reason="quality_gate_reject",
+                            ))
+                            continue
+
                     if check_profit_threshold(price, tp, self.fee_rate):
                         trade_qty = equity * 0.95 / price
                         position = PositionState(
@@ -158,11 +191,15 @@ class BacktestEngine:
                             max_relative_distance=self.max_relative_distance,
                             hard_stop_multiplier=self.hard_stop_multiplier,
                         )
+                        # 挂载 Q-Score 到 position（平仓时传给 Trade）
+                        if q_result is not None:
+                            position._q_score = q_result["q_score"]
+                            position._cv_rmse = q_result["components"]["cv_rmse"]
                         result.records.append(TickRecord(
                             idx=i,
                             price=price,
                             pred_price=float(anchor(0)),
-                            fit_score=1.0,
+                            fit_score=float(q_result["q_score"]) if q_result else 1.0,
                             residual=0.0,
                             direction=Direction.ALIGNED.value,
                             action="open_short",
@@ -208,14 +245,18 @@ class BacktestEngine:
             pnl = (position.entry_price - final_price) * trade_qty
             pnl_after_fee = pnl - self.fee_rate * trade_qty * (position.entry_price + final_price)
             equity += pnl_after_fee
-            result.trades.append(Trade(
+            trade = Trade(
                 entry_idx=position.entry_idx,
                 exit_idx=len(prices) - 1,
                 entry_price=position.entry_price,
                 exit_price=final_price,
                 quantity=trade_qty,
                 reason="force_close_eod",
-            ))
+            )
+            if hasattr(position, "_q_score"):
+                trade.q_score = position._q_score
+                trade.cv_rmse = position._cv_rmse
+            result.trades.append(trade)
 
         result.stats = self._compute_stats(result)
         return result
@@ -248,24 +289,30 @@ class BacktestEngine:
         """
         根据 fitter 配置调用对应拟合器。
 
-        返回 (anchor, theoretical_tp) 或 (None, None)。
-        anchor 可以是 Polynomial / TrajectoryFit / callable。
+        返回 (anchor, theoretical_tp, q_result) 或 (None, None, None)。
         """
+        q_result = None
+
         if self.fitter == "ensemble" and _HAS_ENSEMBLE:
             fit = ensemble_fit(prices, idx, **self.fitter_kwargs)
             if fit is None:
-                return None, None
-            # TP 从 cubic_wls 子模型获取（ensemble 内置）
+                return None, None, None
             poly = fit_cubic_trajectory(prices, idx, **self.fitter_kwargs)
             tp = find_theoretical_take_profit(poly) if poly is not None else None
-            return fit, tp
+            anchor = fit
         else:
-            # 默认 cubic_wls
             poly = fit_cubic_trajectory(prices, idx, **self.fitter_kwargs)
             if poly is None:
-                return None, None
+                return None, None, None
             tp = find_theoretical_take_profit(poly)
-            return poly, tp
+            anchor = poly
+
+        # Phase C: Q-Score 评估
+        if self.track_quality and _HAS_QUALITY:
+            q_result = evaluate_fit_quality(prices, idx, anchor,
+                                            window=self.fitter_kwargs.get("window", 20))
+
+        return anchor, tp, q_result
 
     def _compute_stats(self, result: BacktestResult) -> dict:
         trades = result.trades
@@ -294,7 +341,7 @@ class BacktestEngine:
             dd = (peak - v) / peak
             max_drawdown = max(max_drawdown, dd)
 
-        return {
+        stats = {
             "total_trades": len(trades),
             "wins": len(wins),
             "losses": len(losses),
@@ -308,3 +355,45 @@ class BacktestEngine:
             "max_drawdown": round(max_drawdown * 100, 2),
             "final_equity": round(float(eq[-1]), 4),
         }
+
+        # ---- Phase C: IC 验证 + 质量分档 ----
+        q_trades = [t for t in trades if t.q_score is not None]
+        if len(q_trades) >= 5:
+            from scipy import stats as sp_stats
+            q_scores = np.array([t.q_score for t in q_trades])
+            pnls = np.array([abs(t.pnl_pct) for t in q_trades])  # PnL 幅度
+            ic, ic_pvalue = sp_stats.spearmanr(q_scores, pnls)
+            stats["ic_score"] = round(float(ic), 4)
+            stats["ic_pvalue"] = round(float(ic_pvalue), 4)
+            stats["ic_effective"] = abs(ic) > 0.15
+
+            # 质量分档
+            bins = {"high": [], "mid": [], "low": []}
+            for t in q_trades:
+                if t.q_score >= 0.75:
+                    bins["high"].append(t)
+                elif t.q_score >= 0.50:
+                    bins["mid"].append(t)
+                else:
+                    bins["low"].append(t)
+
+            quality_bins = {}
+            for label, bucket in bins.items():
+                if bucket:
+                    quality_bins[label] = {
+                        "count": len(bucket),
+                        "win_rate": round(sum(1 for t in bucket if t.pnl > 0) / len(bucket) * 100, 1),
+                        "avg_pnl_pct": round(np.mean([t.pnl_pct for t in bucket]), 2),
+                        "total_pnl_pct": round(sum(t.pnl_pct for t in bucket), 2),
+                    }
+            stats["quality_bins"] = quality_bins
+
+            # Q-Score 分布摘要
+            stats["q_score_summary"] = {
+                "mean": round(float(np.mean(q_scores)), 4),
+                "median": round(float(np.median(q_scores)), 4),
+                "std": round(float(np.std(q_scores)), 4),
+                "rejected": sum(1 for r in result.records if r.reason == "quality_gate_reject"),
+            }
+
+        return stats
