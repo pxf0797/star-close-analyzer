@@ -37,7 +37,7 @@ def build_interactive_chart(
 
     fig = make_subplots(
         rows=3, cols=1,
-        shared_xaxes=False,
+        shared_xaxes=True,
         vertical_spacing=0.05,
         row_heights=[0.45, 0.30, 0.25],
         subplot_titles=(title, "残差 & 贴合度", "权益曲线"),
@@ -174,16 +174,16 @@ def build_interactive_chart(
     fig.update_yaxes(title_text="残差", row=2, col=1, secondary_y=False)
     fig.update_yaxes(title_text="贴合度", range=[-0.05, 1.1], row=2, col=1, secondary_y=True)
 
-    # ═══════════ Panel 3: 权益曲线 (百分比) ═══════════
+    # ═══════════ Panel 3: 权益曲线 (K线索引X轴，与面板1-2对齐) ═══════════
     equity = np.array(result.equity_curve)
     eq0 = result.equity_curve[0]
     eq_pct = (equity - eq0) / eq0 * 100
-    eq_x = np.arange(len(equity)) / len(prices) * 100
+    eq_x = np.arange(len(equity))
     fig.add_trace(
         go.Scatter(x=eq_x, y=eq_pct, mode="lines", name="收益%",
                    line=dict(color=C_EQUITY, width=1.5),
                    fill="tozeroy", fillcolor=C_EQUITY_BG,
-                   hovertemplate="进度=%{x:.1f}%<br>收益=%{y:.2f}%<extra></extra>"),
+                   hovertemplate="idx=%{x}<br>收益=%{y:.2f}%<extra></extra>"),
         row=3, col=1,
     )
     fig.add_hline(y=0, line_dash="dot", line_color="gray",
@@ -191,19 +191,16 @@ def build_interactive_chart(
 
     # 标记交易出场
     for ti, trade in enumerate(result.trades):
-        ex = (trade.exit_idx / len(prices)) * 100
         ey = eq_pct[min(ti + 1, len(eq_pct) - 1)]
         clr = C_WIN if trade.pnl > 0 else C_LOSS
         fig.add_trace(go.Scatter(
-            x=[ex], y=[ey], mode="markers",
+            x=[trade.exit_idx], y=[ey], mode="markers",
             marker=dict(symbol="triangle-down" if trade.pnl > 0 else "triangle-up",
                         size=8, color=clr, line=dict(width=1, color="white")),
             showlegend=False, hovertemplate=f"Exit #{trade.entry_idx}<br>{trade.pnl_pct:+.2f}%<extra></extra>",
         ), row=3, col=1)
 
     # Layout
-    fig.update_xaxes(title_text="K 线索引", row=2, col=1)
-    fig.update_xaxes(title_text="进度 %", row=3, col=1)
     fig.update_yaxes(title_text="Price", tickprefix="$", row=1, col=1)
     fig.update_yaxes(title_text="收益 %", ticksuffix="%", row=3, col=1)
 
