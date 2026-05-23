@@ -12,6 +12,14 @@ from star_analyzer.closing import (
     evaluate_close, check_profit_threshold, compute_fit_score,
 )
 
+# Phase B 拟合器（可选）
+try:
+    from star_analyzer.fitting.ensemble import ensemble_fit, TrajectoryFit
+    _HAS_ENSEMBLE = True
+except ImportError:
+    _HAS_ENSEMBLE = False
+    TrajectoryFit = None
+
 
 @dataclass
 class Trade:
@@ -63,7 +71,9 @@ class BacktestEngine:
         max_relative_distance: float = 0.05,
         hard_stop_multiplier: float = 2.0,
         short_only: bool = True,
-        bars_per_year: int = 365 * 24,  # 默认 1H K 线: 365天×24小时
+        bars_per_year: int = 365 * 24,
+        fitter: str = "cubic_wls",         # "cubic_wls" | "ensemble"
+        fitter_kwargs: dict | None = None,
     ):
         self.initial_capital = initial_capital
         self.fee_rate = fee_rate
@@ -73,6 +83,8 @@ class BacktestEngine:
         self.hard_stop_multiplier = hard_stop_multiplier
         self.short_only = short_only
         self.bars_per_year = bars_per_year
+        self.fitter = fitter
+        self.fitter_kwargs = fitter_kwargs or {}
 
     def run(self, prices: np.ndarray, entry_signals: np.ndarray | None = None) -> BacktestResult:
         """
@@ -130,16 +142,15 @@ class BacktestEngine:
                     pass
 
             elif entry_signals[i] and position is None:
-                poly = fit_cubic_trajectory(prices, i)
-                if poly is not None:
-                    tp = find_theoretical_take_profit(poly)
+                anchor, tp = self._fit_entry(prices, i)
+                if anchor is not None:
                     if check_profit_threshold(price, tp, self.fee_rate):
-                        trade_qty = equity * 0.95 / price  # 95% 仓位
+                        trade_qty = equity * 0.95 / price
                         position = PositionState(
                             entry_price=price,
                             entry_idx=i,
                             quantity=trade_qty,
-                            anchor=poly,
+                            anchor=anchor,
                             theoretical_tp=tp,
                             fee_rate=self.fee_rate,
                             half_life=self.half_life,
@@ -150,7 +161,7 @@ class BacktestEngine:
                         result.records.append(TickRecord(
                             idx=i,
                             price=price,
-                            pred_price=float(poly(0)),
+                            pred_price=float(anchor(0)),
                             fit_score=1.0,
                             residual=0.0,
                             direction=Direction.ALIGNED.value,
@@ -232,6 +243,29 @@ class BacktestEngine:
         log_returns = np.diff(np.log(np.maximum(segment, 1e-12)))
         vol = float(np.std(log_returns))
         return max(vol, 0.0005)
+
+    def _fit_entry(self, prices: np.ndarray, idx: int):
+        """
+        根据 fitter 配置调用对应拟合器。
+
+        返回 (anchor, theoretical_tp) 或 (None, None)。
+        anchor 可以是 Polynomial / TrajectoryFit / callable。
+        """
+        if self.fitter == "ensemble" and _HAS_ENSEMBLE:
+            fit = ensemble_fit(prices, idx, **self.fitter_kwargs)
+            if fit is None:
+                return None, None
+            # TP 从 cubic_wls 子模型获取（ensemble 内置）
+            poly = fit_cubic_trajectory(prices, idx, **self.fitter_kwargs)
+            tp = find_theoretical_take_profit(poly) if poly is not None else None
+            return fit, tp
+        else:
+            # 默认 cubic_wls
+            poly = fit_cubic_trajectory(prices, idx, **self.fitter_kwargs)
+            if poly is None:
+                return None, None
+            tp = find_theoretical_take_profit(poly)
+            return poly, tp
 
     def _compute_stats(self, result: BacktestResult) -> dict:
         trades = result.trades

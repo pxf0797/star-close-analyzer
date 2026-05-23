@@ -143,6 +143,9 @@ st.sidebar.subheader("策略参数")
 chart_engine = st.sidebar.radio("图表引擎", ["plotly", "matplotlib"],
     format_func=lambda x: {"plotly": "📊 Plotly (交互)", "matplotlib": "📈 Matplotlib (静态)"}[x],
     help="Plotly 支持 hover/zoom/框选；Matplotlib 为原有静态图表")
+fitter_name = st.sidebar.selectbox("拟合器", ["cubic_wls", "ensemble"],
+    format_func=lambda x: {"cubic_wls": "WLS 三次 (Phase A)", "ensemble": "多模型集成 (Phase B)"}[x],
+    help="cubic_wls: WLS + 解析 f'(0)=0 + CV 门控。ensemble: WLS+ElasticNet+均值回复+GPR 集成")
 half_life = st.sidebar.slider("半衰期 (bar)", 5, 60, 15, 1,
     help="衰减因子半衰期。越小越敏感，越大越宽容")
 confidence = st.sidebar.slider("自信度阈值", 0.10, 0.80, 0.30, 0.05,
@@ -262,6 +265,7 @@ else:
             confidence_threshold=confidence,
             max_relative_distance=max_distance,
             hard_stop_multiplier=hard_stop_mul,
+            fitter=fitter_name,
         )
         result = engine.run(prices)
         elapsed = time.time() - t0

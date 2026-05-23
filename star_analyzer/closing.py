@@ -12,6 +12,7 @@
 import math
 import enum
 from dataclasses import dataclass, field
+from typing import Any
 import numpy as np
 from numpy.polynomial import Polynomial
 
@@ -62,7 +63,7 @@ class PositionState:
     entry_price: float
     entry_idx: int
     quantity: float
-    anchor: Polynomial                          # 冻结的三次多项式
+    anchor: Polynomial | Any                    # 冻结的轨迹（Polynomial / TrajectoryFit / callable）
     theoretical_tp: float | None = None         # 理论止盈价
     fee_rate: float = 0.0008                    # 双边手续费率
     half_life: int = 15                         # 半衰期（bar 数）
