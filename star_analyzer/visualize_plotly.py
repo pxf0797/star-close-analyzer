@@ -207,9 +207,14 @@ def build_interactive_chart(
     fig.update_yaxes(title_text="Price", tickprefix="$", row=1, col=1)
     fig.update_yaxes(title_text="收益 %", ticksuffix="%", row=3, col=1)
 
+    # 跨面板联动 — 鼠标竖线光标 (3面板)
+    for r in [1, 2, 3]:
+        fig.update_xaxes(spikemode="across", spikesnap="cursor", spikethickness=0.6,
+                          spikecolor="rgba(0,0,0,0.15)", row=r, col=1)
     fig.update_layout(
         height=750,
         hovermode="x unified",
+        spikedistance=-1,
         template="plotly_white",
         margin=dict(l=60, r=30, t=50, b=40),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, font=dict(size=10)),
@@ -281,7 +286,10 @@ def build_trajectory_detail_plotly(
     fig.add_vline(x=0, line_dash="dash", line_color=C_TRAJ, line_width=0.8, row=1, col=2)
 
     fig.update_yaxes(range=[entry_price * 0.9, entry_price * 1.1], row=1, col=1)
-    fig.update_layout(height=400, template="plotly_white", hovermode="x unified")
+    for r in [1, 2]:
+        fig.update_xaxes(spikemode="across", spikesnap="cursor", spikethickness=0.6,
+                          spikecolor="rgba(0,0,0,0.15)", row=r, col=1)
+    fig.update_layout(height=400, template="plotly_white", hovermode="x unified", spikedistance=-1)
     return fig
 
 
@@ -411,10 +419,14 @@ def build_replay_chart(prices: np.ndarray, result: BacktestResult, current_idx: 
     fig.update_yaxes(title_text="残差", row=2, col=1, secondary_y=False)
     fig.update_yaxes(title_text="贴合度", range=[-0.05, 1.1], row=2, col=1, secondary_y=True)
 
+    for r in [1, 2]:
+        fig.update_xaxes(spikemode="across", spikesnap="cursor", spikethickness=0.6,
+                          spikecolor="rgba(0,0,0,0.15)", row=r, col=1)
     fig.update_layout(
         height=500,
         template="plotly_white",
         hovermode="x unified",
+        spikedistance=-1,
         margin=dict(l=50, r=50, t=50, b=30),
     )
     return fig
