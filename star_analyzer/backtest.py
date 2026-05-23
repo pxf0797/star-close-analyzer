@@ -82,7 +82,7 @@ class BacktestEngine:
         若为 None，则在 detected local maxima 处开仓。
         """
         result = BacktestResult()
-        result.equity_curve = [self.initial_capital]
+        result.equity_curve = []
         equity = self.initial_capital
 
         position: PositionState | None = None
@@ -93,6 +93,7 @@ class BacktestEngine:
 
         for i in range(len(prices)):
             price = float(prices[i])
+            result.equity_curve.append(equity)  # 每 tick 记录期初权益
 
             if position is not None:
                 current_vol = self._estimate_volatility(prices, i)
@@ -115,7 +116,6 @@ class BacktestEngine:
                     pnl = (position.entry_price - price) * trade_qty
                     pnl_after_fee = pnl - self.fee_rate * trade_qty * (position.entry_price + price)
                     equity += pnl_after_fee
-                    result.equity_curve.append(equity)
                     result.trades.append(Trade(
                         entry_idx=position.entry_idx,
                         exit_idx=i,
@@ -127,7 +127,7 @@ class BacktestEngine:
                     position = None
                     trade_qty = 0.0
                 else:
-                    result.equity_curve.append(equity)
+                    pass
 
             elif entry_signals[i] and position is None:
                 poly = fit_cubic_trajectory(prices, i)
@@ -190,7 +190,6 @@ class BacktestEngine:
                     action="hold",
                     reason="no_signal",
                 ))
-                result.equity_curve.append(equity)
 
         # 强制平掉未平仓
         if position is not None:
@@ -207,7 +206,6 @@ class BacktestEngine:
                 reason="force_close_eod",
             ))
 
-        result.equity_curve.append(equity)
         result.stats = self._compute_stats(result)
         return result
 
