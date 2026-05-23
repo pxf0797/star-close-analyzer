@@ -52,24 +52,27 @@ def build_interactive_chart(
     # ═══════════ Panel 1: 价格(红线) + 轨迹 + 信号标记 ═══════════
     sig_events = [r for r in result.records if r.action in ("open_short", "upsert_protection", "market_close_all")]
     for action_type in ["open_short", "upsert_protection", "market_close_all"]:
-        pts = [(r.idx, sig_y) for r in sig_events if r.action == action_type]
-        if pts:
-            xs, ys = zip(*pts)
+        action_records = [r for r in sig_events if r.action == action_type]
+        if action_records:
+            xs = [r.idx for r in action_records]
+            ys = [sig_y] * len(action_records)
+            actual_prices = [prices[r.idx] for r in action_records]
             fig.add_trace(go.Scatter(
                 x=xs, y=ys, mode="markers",
                 name=SIGNAL_NAME[action_type],
                 marker=dict(symbol=SIGNAL_SYMBOL[action_type], size=7,
                            color=SIGNAL_COLOR[action_type], line=dict(width=1, color="white")),
-                hovertemplate=f"{SIGNAL_NAME[action_type]} #" + "%{x}<extra></extra>",
+                customdata=actual_prices,
+                hovertemplate=f"{SIGNAL_NAME[action_type]} #%{{x}}<br>Price=%{{customdata:.2f}}<extra></extra>",
                 legendgroup="signals",
             ), row=1, col=1)
 
     # 关键信号竖线（开仓/全平）
     for r in result.records:
         if r.action == "open_short":
-            fig.add_vline(x=r.idx, line_dash="dot", line_color=C_TRAJ, line_width=0.5, opacity=0.4, row=1, col=1)
+            fig.add_vline(x=r.idx, line_dash="dot", line_color=C_TRAJ, line_width=0.5, opacity=0.25, row=1, col=1)
         elif r.action == "market_close_all":
-            fig.add_vline(x=r.idx, line_dash="dot", line_color=C_LOSS, line_width=0.5, opacity=0.4, row=1, col=1)
+            fig.add_vline(x=r.idx, line_dash="dot", line_color=C_LOSS, line_width=0.5, opacity=0.25, row=1, col=1)
 
     # 价格线 — 红色
     fig.add_trace(
@@ -207,7 +210,7 @@ def build_interactive_chart(
     # 跨面板联动 — 鼠标竖线光标 (3面板)
     for r in [1, 2, 3]:
         fig.update_xaxes(showspikes=True, spikemode="across+marker", spikesnap="cursor",
-                          spikethickness=0.8, spikecolor="rgba(100,100,100,0.3)", row=r, col=1)
+                          spikethickness=1.2, spikecolor="rgba(80,80,80,0.5)", row=r, col=1)
     fig.update_layout(
         height=750,
         hovermode="x unified",
@@ -215,6 +218,14 @@ def build_interactive_chart(
         template="plotly_white",
         margin=dict(l=60, r=30, t=50, b=40),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, font=dict(size=10)),
+    )
+
+    # 跨子图十字光标 (yref="paper" 纵向跨越全部子图，JS 动态更新 X)
+    fig.add_shape(
+        type="line", x0=0, y0=0, x1=0, y1=1,
+        xref="x", yref="paper",
+        line=dict(color="rgba(100,100,100,0.4)", width=1.2, dash="dot"),
+        visible=False,
     )
 
     return fig
@@ -283,9 +294,9 @@ def build_trajectory_detail_plotly(
     fig.add_vline(x=0, line_dash="dash", line_color=C_TRAJ, line_width=0.8, row=1, col=2)
 
     fig.update_yaxes(range=[entry_price * 0.9, entry_price * 1.1], row=1, col=1)
-    for r in [1, 2]:
+    for c in [1, 2]:
         fig.update_xaxes(showspikes=True, spikemode="across+marker", spikesnap="cursor",
-                          spikethickness=0.8, spikecolor="rgba(100,100,100,0.3)", row=r, col=1)
+                          spikethickness=1.2, spikecolor="rgba(80,80,80,0.5)", row=1, col=c)
     fig.update_layout(height=400, template="plotly_white", hovermode="x unified", spikedistance=-1)
     return fig
 
@@ -418,7 +429,7 @@ def build_replay_chart(prices: np.ndarray, result: BacktestResult, current_idx: 
 
     for r in [1, 2]:
         fig.update_xaxes(showspikes=True, spikemode="across+marker", spikesnap="cursor",
-                          spikethickness=0.8, spikecolor="rgba(100,100,100,0.3)", row=r, col=1)
+                          spikethickness=1.2, spikecolor="rgba(80,80,80,0.5)", row=r, col=1)
     fig.update_layout(
         height=500,
         template="plotly_white",
@@ -426,4 +437,13 @@ def build_replay_chart(prices: np.ndarray, result: BacktestResult, current_idx: 
         spikedistance=-1,
         margin=dict(l=50, r=50, t=50, b=30),
     )
+
+    # 跨子图十字光标
+    fig.add_shape(
+        type="line", x0=0, y0=0, x1=0, y1=1,
+        xref="x", yref="paper",
+        line=dict(color="rgba(100,100,100,0.4)", width=1.2, dash="dot"),
+        visible=False,
+    )
+
     return fig

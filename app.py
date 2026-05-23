@@ -4,8 +4,11 @@
 
 import sys
 import time
+import json
+import uuid
 import numpy as np
 import streamlit as st
+import plotly.io as pio
 
 st.set_page_config(
     page_title="星空策略 · 回测面板",
@@ -23,6 +26,76 @@ from star_analyzer.visualize_plotly import build_interactive_chart, build_trajec
 from star_analyzer.trajectory import fit_cubic_trajectory, find_theoretical_take_profit
 from star_analyzer.closing import check_profit_threshold
 from star_analyzer.alma import alma
+
+
+def _render_plotly(fig, height=750):
+    """将 Plotly 图表渲染为带跨子图十字光标的 HTML 组件。
+
+    Plotly 的 showspikes 只在鼠标所在子图中绘制竖线。通过注入 JavaScript，
+    监听 plotly_hover 事件并动态更新 yref="paper" 的 shape，实现跨越全部
+    子图的同步十字光标。
+    """
+    figure_json = pio.to_json(fig)
+    div_id = f"plot-{uuid.uuid4().hex[:8]}"
+
+    html = """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{ width: 100%; height: 100vh; overflow: hidden; }}
+#{div_id} {{ width: 100%; height: 100%; }}
+</style>
+</head>
+<body>
+<div id="{div_id}"></div>
+<script>
+(function() {{
+    var figure = {figure_json};
+    var config = {{
+        responsive: true,
+        displayModeBar: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ['lasso2d', 'select2d']
+    }};
+    Plotly.newPlot('{div_id}', figure.data, figure.layout, config).then(function(gd) {{
+        gd.on('plotly_hover', function(evt) {{
+            if (!evt.points || evt.points.length === 0) return;
+            var xv = evt.points[0].x;
+            var shapes = gd.layout.shapes || [];
+            var update = {{}};
+            for (var i = 0; i < shapes.length; i++) {{
+                if (shapes[i].yref === 'paper') {{
+                    update['shapes[' + i + '].x0'] = xv;
+                    update['shapes[' + i + '].x1'] = xv;
+                    update['shapes[' + i + '].visible'] = true;
+                }}
+            }}
+            if (Object.keys(update).length > 0) {{
+                Plotly.relayout(gd, update);
+            }}
+        }});
+        gd.on('plotly_unhover', function() {{
+            var shapes = gd.layout.shapes || [];
+            var update = {{}};
+            for (var i = 0; i < shapes.length; i++) {{
+                if (shapes[i].yref === 'paper') {{
+                    update['shapes[' + i + '].visible'] = false;
+                }}
+            }}
+            if (Object.keys(update).length > 0) {{
+                Plotly.relayout(gd, update);
+            }}
+        }});
+    }});
+}})();
+</script>
+</body>
+</html>""".format(div_id=div_id, figure_json=figure_json)
+
+    return st.components.v1.html(html, height=height)
 
 
 # ═══════════════════════════════════════════════
@@ -148,7 +221,7 @@ if entry_idx > 0:
         if chart_engine == "plotly":
             fig_plotly = build_trajectory_detail_plotly(prices, entry_idx)
             if fig_plotly:
-                st.plotly_chart(fig_plotly, width='stretch')
+                _render_plotly(fig_plotly, height=420)
             else:
                 st.error("轨迹拟合失败")
         else:
@@ -210,7 +283,7 @@ else:
     with tab1:
         if chart_engine == "plotly":
             fig_interactive = build_interactive_chart(prices, result, alma_line=alma_line)
-            st.plotly_chart(fig_interactive, width='stretch')
+            _render_plotly(fig_interactive, height=760)
         else:
             fig_main = plot_analysis(prices, result, save_path="", title="星空策略 · 轨迹冻结平仓分析")
             st.pyplot(fig_main)
@@ -225,7 +298,7 @@ else:
             replay_idx = st.slider("K 线索引", 0, max_idx, 0, 1, key="replay_slider")
 
             fig_rp = build_replay_chart(prices, result, replay_idx, alma_line=alma_line)
-            st.plotly_chart(fig_rp, width='stretch')
+            _render_plotly(fig_rp, height=520)
 
             # 当前 tick 的状态摘要
             rec_at_tick = [r for r in result.records if r.idx == replay_idx]
