@@ -223,7 +223,7 @@ else:
                 c3.metric("贴合度", f"{r.fit_score:.4f}" if r.fit_score > 0 else "—")
                 c4.metric("方向", r.direction)
 
-            # 若当前 tick 在某笔交易持仓期内，展示该 entry 的 V 和 A
+            # 若当前 tick 在某笔交易持仓期内，展示该 entry 的 V、A 和浮盈
             active_trade = None
             for t in result.trades:
                 if t.entry_idx <= replay_idx <= t.exit_idx:
@@ -234,15 +234,14 @@ else:
                 if poly_entry is not None:
                     v_val = poly_entry.deriv(1)(0)
                     a_val = poly_entry.deriv(2)(0)
-                    c5, c6 = st.columns(2)
+                    unreal = (active_trade.entry_price - prices[replay_idx]) / active_trade.entry_price * 100
+                    c5, c6, c7 = st.columns(3)
                     c5.metric("V (速度)", f"{v_val:.4f}",
-                              delta="≈0 ✅" if abs(v_val) < 1 else "偏大 ⚠️",
-                              help="f'(0) — 入场时刻的瞬时价格变化速率，≈0 表示处于极值点")
+                              delta="≈0 ✅" if abs(v_val) < 1 else "偏大 ⚠️")
                     c6.metric("A (加速度)", f"{a_val:.4f}",
-                              delta="<0 ✅" if a_val < 0 else "≥0 ⚠️",
-                              help="f''(0) — 入场时刻的曲率，<0 表示局部极大（符合做空预期）")
-                else:
-                    st.caption("V/A: 轨迹拟合数据不可用")
+                              delta="<0 ✅" if a_val < 0 else "≥0 ⚠️")
+                    c7.metric("浮盈", f"{unreal:+.2f}%",
+                              delta="📈 盈利中" if unreal > 0 else "📉 亏损中")
 
     with tab3:
         if result.trades:
