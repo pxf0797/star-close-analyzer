@@ -22,6 +22,7 @@ from star_analyzer.visualize import plot_analysis, plot_trajectory_detail
 from star_analyzer.visualize_plotly import build_interactive_chart, build_trajectory_detail_plotly, build_replay_chart
 from star_analyzer.trajectory import fit_cubic_trajectory, find_theoretical_take_profit
 from star_analyzer.closing import check_profit_threshold
+from star_analyzer.alma import alma
 
 
 # ═══════════════════════════════════════════════
@@ -80,6 +81,16 @@ hard_stop_mul = st.sidebar.slider("硬止损倍数", 1.0, 5.0, 2.0, 0.5,
     help="硬止损 = max(N×tol, 最大距离)")
 capital = st.sidebar.number_input("初始资金", 100, 100000, 1000, 100)
 
+# ALMA 零滞后滤波
+st.sidebar.subheader("ALMA 价格滤波")
+use_alma = st.sidebar.checkbox("启用 ALMA", value=False,
+    help="零滞后高斯核滤波 — 比 SMA 滞后小得多，适合做价格趋势参考")
+alma_window = st.sidebar.slider("ALMA 窗口", 3, 30, 9, 1, disabled=not use_alma)
+alma_offset = st.sidebar.slider("ALMA 偏移", 0.0, 1.0, 0.85, 0.05, disabled=not use_alma,
+    help="越大滞后越小，0.85 为推荐值")
+alma_sigma = st.sidebar.slider("ALMA 平滑度", 1.0, 20.0, 6.0, 0.5, disabled=not use_alma,
+    help="越大越平滑")
+
 # 单次轨迹分析
 st.sidebar.subheader("单次轨迹分析")
 entry_idx = st.sidebar.number_input("入场 K 线索引", 0, 9999, 0,
@@ -118,6 +129,9 @@ with st.spinner("加载数据…"):
         st.stop()
 
 st.success(f"已加载 {meta.length} 根 K 线 — {meta.name}")
+
+# ALMA 滤波
+alma_line = alma(prices, window=alma_window, offset=alma_offset, sigma=alma_sigma) if use_alma else None
 
 # 运行分析
 if entry_idx > 0:
@@ -195,7 +209,7 @@ else:
 
     with tab1:
         if chart_engine == "plotly":
-            fig_interactive = build_interactive_chart(prices, result)
+            fig_interactive = build_interactive_chart(prices, result, alma_line=alma_line)
             st.plotly_chart(fig_interactive, width='stretch')
         else:
             fig_main = plot_analysis(prices, result, save_path="", title="星空策略 · 轨迹冻结平仓分析")
@@ -210,7 +224,7 @@ else:
             max_idx = len(prices) - 1
             replay_idx = st.slider("K 线索引", 0, max_idx, 0, 1, key="replay_slider")
 
-            fig_rp = build_replay_chart(prices, result, replay_idx)
+            fig_rp = build_replay_chart(prices, result, replay_idx, alma_line=alma_line)
             st.plotly_chart(fig_rp, width='stretch')
 
             # 当前 tick 的状态摘要

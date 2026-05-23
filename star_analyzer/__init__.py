@@ -20,3 +20,4 @@ from star_analyzer.visualize import plot_analysis, plot_trajectory_detail
 from star_analyzer.visualize_plotly import (
     build_interactive_chart, build_trajectory_detail_plotly, build_replay_chart,
 )
+from star_analyzer.alma import alma

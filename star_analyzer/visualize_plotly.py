@@ -31,6 +31,7 @@ def build_interactive_chart(
     prices: np.ndarray,
     result: BacktestResult,
     title: str = "星空策略 · 轨迹冻结平仓分析",
+    alma_line: np.ndarray | None = None,
 ) -> go.Figure:
     """3 面板: (1)价格+信号条 (2)残差+贴合度双轴 (3)权益曲线"""
 
@@ -77,6 +78,16 @@ def build_interactive_chart(
                    hovertemplate="idx=%{x}<br>Price=%{y:.2f}<extra></extra>"),
         row=1, col=1,
     )
+
+    # ALMA 滤波线
+    if alma_line is not None:
+        valid = ~np.isnan(alma_line)
+        fig.add_trace(
+            go.Scatter(x=x[valid], y=alma_line[valid], mode="lines", name="ALMA",
+                       line=dict(color="#e67e22", width=1.5, dash="solid"),
+                       hovertemplate="idx=%{x}<br>ALMA=%{y:.2f}<extra></extra>"),
+            row=1, col=1,
+        )
 
     # 持仓区间着色
     for trade in result.trades:
@@ -274,7 +285,8 @@ def build_trajectory_detail_plotly(
     return fig
 
 
-def build_replay_chart(prices: np.ndarray, result: BacktestResult, current_idx: int) -> go.Figure:
+def build_replay_chart(prices: np.ndarray, result: BacktestResult, current_idx: int,
+                      alma_line: np.ndarray | None = None) -> go.Figure:
     """Tick 回放 — 2 面板: (1)价格+轨迹 (2)残差+贴合度+信号"""
 
     # 找到当前持仓获取 V/A 和浮盈
@@ -314,6 +326,17 @@ def build_replay_chart(prices: np.ndarray, result: BacktestResult, current_idx: 
                    hovertemplate="idx=%{x}<br>Price=%{y:.2f}<extra></extra>"),
         row=1, col=1,
     )
+
+    # ALMA
+    if alma_line is not None:
+        alma_slice = alma_line[:current_idx + 1]
+        valid = ~np.isnan(alma_slice)
+        fig.add_trace(
+            go.Scatter(x=x[valid], y=alma_slice[valid], mode="lines", name="ALMA",
+                       line=dict(color="#e67e22", width=1.5),
+                       hovertemplate="idx=%{x}<br>ALMA=%{y:.2f}<extra></extra>"),
+            row=1, col=1,
+        )
 
     entries_before = [r for r in result.records if r.action == "open_short" and r.idx <= current_idx]
     exits_before = [t for t in result.trades if t.exit_idx <= current_idx]
