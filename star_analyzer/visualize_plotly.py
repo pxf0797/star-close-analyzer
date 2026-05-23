@@ -64,7 +64,7 @@ def build_interactive_chart(
     # 价格线
     fig.add_trace(
         go.Scatter(x=x, y=prices, mode="lines", name="Price",
-                   line=dict(color=C_PRICE, width=0.9),
+                   line=dict(color=C_PRICE, width=1.8),
                    hovertemplate="idx=%{x}<br>Price=%{y:.2f}<extra></extra>"),
         row=1, col=1,
     )
@@ -84,7 +84,7 @@ def build_interactive_chart(
             max_t = 200
             for t in result.trades:
                 if t.entry_idx == rec.idx:
-                    max_t = min(t.exit_idx - rec.idx + 20, 50)
+                    max_t = min(t.exit_idx - rec.idx + 10, 35)
                     break
             t_traj = np.arange(0, min(len(prices) - rec.idx, max_t))
             traj_y = poly(t_traj)
@@ -297,7 +297,7 @@ def build_replay_chart(prices: np.ndarray, result: BacktestResult, current_idx: 
     # ═══ Panel 1: 价格 + 轨迹 ═══
     fig.add_trace(
         go.Scatter(x=x, y=prices[:current_idx + 1], mode="lines",
-                   name="Price", line=dict(color=C_PRICE, width=0.9),
+                   name="Price", line=dict(color=C_PRICE, width=1.8),
                    hovertemplate="idx=%{x}<br>Price=%{y:.2f}<extra></extra>"),
         row=1, col=1,
     )
@@ -309,7 +309,7 @@ def build_replay_chart(prices: np.ndarray, result: BacktestResult, current_idx: 
         poly = fit_cubic_trajectory(prices, rec.idx)
         if poly is None:
             continue
-        t_end = min(len(prices) - rec.idx, current_idx - rec.idx + 10, 40)
+        t_end = min(len(prices) - rec.idx, current_idx - rec.idx + 5, 30)
         if t_end <= 0:
             continue
         t_traj = np.arange(0, t_end)
