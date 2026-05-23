@@ -46,7 +46,12 @@ def build_interactive_chart(
         if rec.action == "open_short":
             poly = fit_cubic_trajectory(prices, rec.idx)
             if poly is not None:
-                t_traj = np.arange(0, min(len(prices) - rec.idx, 200))
+                max_t = 200
+                for t in result.trades:
+                    if t.entry_idx == rec.idx:
+                        max_t = min(t.exit_idx - rec.idx + 20, 50)
+                        break
+                t_traj = np.arange(0, min(len(prices) - rec.idx, max_t))
                 traj_y = poly(t_traj)
                 traj_x = rec.idx + t_traj
                 fig.add_trace(
@@ -319,7 +324,7 @@ def build_replay_chart(prices: np.ndarray, result: BacktestResult, current_idx: 
 
         poly = fit_cubic_trajectory(prices, rec.idx)
         if poly is not None:
-            t_end = min(len(prices) - rec.idx, current_idx - rec.idx + 20)
+            t_end = min(len(prices) - rec.idx, current_idx - rec.idx + 10, 40)
             if t_end > 0:
                 t_traj = np.arange(0, t_end)
                 traj_y = poly(t_traj)

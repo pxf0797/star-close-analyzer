@@ -67,7 +67,12 @@ def plot_analysis(
         if rec.action == "open_short":
             poly = fit_cubic_trajectory(prices, rec.idx)
             if poly is not None:
-                t_traj = np.arange(0, min(len(prices) - rec.idx, 200))
+                max_t = 200
+                for t in result.trades:
+                    if t.entry_idx == rec.idx:
+                        max_t = min(t.exit_idx - rec.idx + 20, 50)
+                        break
+                t_traj = np.arange(0, min(len(prices) - rec.idx, max_t))
                 traj_y = poly(t_traj)
                 ax_price.plot(rec.idx + t_traj, traj_y, "--", color="#8e44ad",
                                linewidth=1.5, alpha=0.6)
