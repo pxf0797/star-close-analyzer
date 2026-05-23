@@ -9,7 +9,7 @@ from star_analyzer.backtest import BacktestResult
 from star_analyzer.trajectory import fit_cubic_trajectory, find_theoretical_take_profit
 
 # 统一调色板
-C_PRICE    = "#1a1a2e"
+C_PRICE    = "#c0392b"   # 价格线 — 深红
 C_TRAJ     = "#8e44ad"
 C_TP       = "#27ae60"
 C_WIN      = "#27ae60"
@@ -21,8 +21,9 @@ C_EQUITY_BG= "rgba(44,62,80,0.1)"
 C_ALIGNED  = "#7f8c8d"
 C_FAVORABLE= "#27ae60"
 C_ADVERSE  = "#e74c3c"
-C_SIGNAL   = {2: "#8e44ad", 1: "#3498db", 0: "rgba(0,0,0,0.03)", -1: "#e74c3c"}
-SIGNAL_LABEL = {2: "开仓", 1: "保护单", 0: "", -1: "全平"}
+SIGNAL_COLOR = {"open_short": "#8e44ad", "upsert_protection": "#3498db", "market_close_all": "#e74c3c"}
+SIGNAL_SYMBOL = {"open_short": "diamond", "upsert_protection": "circle", "market_close_all": "x"}
+SIGNAL_NAME   = {"open_short": "开仓", "upsert_protection": "保护单", "market_close_all": "全平"}
 RESID_COLORS = {"aligned": C_ALIGNED, "favorable": C_FAVORABLE, "adverse": C_ADVERSE}
 
 
@@ -39,43 +40,43 @@ def build_interactive_chart(
         vertical_spacing=0.05,
         row_heights=[0.45, 0.30, 0.25],
         subplot_titles=(title, "残差 & 贴合度", "权益曲线"),
-        specs=[[{"secondary_y": True}],   # 次轴给信号色带
+        specs=[[{"secondary_y": False}],
                [{"secondary_y": True}],
                [{"secondary_y": False}]],
     )
 
     x = np.arange(len(prices))
+    avg_price = float(np.mean(prices))
 
-    # ═══════════ Panel 1: 价格 + 轨迹 + 信号色带 ═══════════
-    signal_map = {"open_short": 2, "hold": 0, "upsert_protection": 1, "market_close_all": -1}
-    signals = np.array([signal_map.get(r.action, 0) for r in result.records])
-    SIG_COLORS = {2: "#8e44ad", 1: "#3498db", 0: "rgba(0,0,0,0.02)", -1: "#e74c3c"}
-    SIG_LABEL = {2: "开仓", 1: "保护单", 0: "", -1: "全平"}
+    # ═══════════ Panel 1: 价格(红线) + 轨迹 + 信号标记 ═══════════
+    # 信号标记 — 用散点标在均价线位置
+    sig_events = [r for r in result.records if r.action in ("open_short", "upsert_protection", "market_close_all")]
+    for action_type in ["open_short", "upsert_protection", "market_close_all"]:
+        pts = [(r.idx, avg_price) for r in sig_events if r.action == action_type]
+        if pts:
+            xs, ys = zip(*pts)
+            fig.add_trace(go.Scatter(
+                x=xs, y=ys, mode="markers",
+                name=SIGNAL_NAME[action_type],
+                marker=dict(symbol=SIGNAL_SYMBOL[action_type], size=7,
+                           color=SIGNAL_COLOR[action_type], line=dict(width=1, color="white")),
+                hovertemplate=f"{SIGNAL_NAME[action_type]} #" + "%{x}<extra></extra>",
+                legendgroup="signals",
+            ), row=1, col=1)
 
-    # 信号色带 — 次Y轴，范围 [0,3]，不干扰价格主轴
-    fig.add_trace(
-        go.Bar(x=x, y=np.full(len(x), 1.5), marker_color=[SIG_COLORS[s] for s in signals],
-               name="Signal", showlegend=False, width=1.0,
-               customdata=[SIG_LABEL[s] for s in signals],
-               hovertemplate="idx=%{x}<br>%{customdata}<extra></extra>",
-               marker_line_width=0),
-        row=1, col=1, secondary_y=True,
-    )
-    fig.update_yaxes(range=[0, 3], showticklabels=False, row=1, col=1, secondary_y=True)
-
-    # 关键信号竖线标记
+    # 关键信号竖线（开仓/全平）
     for r in result.records:
         if r.action == "open_short":
-            fig.add_vline(x=r.idx, line_dash="dot", line_color=C_TRAJ, line_width=0.5, opacity=0.5, row=1, col=1)
+            fig.add_vline(x=r.idx, line_dash="dot", line_color=C_TRAJ, line_width=0.5, opacity=0.4, row=1, col=1)
         elif r.action == "market_close_all":
-            fig.add_vline(x=r.idx, line_dash="dot", line_color=C_LOSS, line_width=0.5, opacity=0.5, row=1, col=1)
+            fig.add_vline(x=r.idx, line_dash="dot", line_color=C_LOSS, line_width=0.5, opacity=0.4, row=1, col=1)
 
-    # 价格线 — 主轴
+    # 价格线 — 红色
     fig.add_trace(
         go.Scatter(x=x, y=prices, mode="lines", name="Price",
                    line=dict(color=C_PRICE, width=1.8),
                    hovertemplate="idx=%{x}<br>Price=%{y:.2f}<extra></extra>"),
-        row=1, col=1, secondary_y=False,
+        row=1, col=1,
     )
 
     # 持仓区间着色

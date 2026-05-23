@@ -41,7 +41,7 @@ def plot_analysis(
     x = np.arange(len(prices))
 
     # === 1. 价格与轨迹 ===
-    ax_price.plot(x, prices, color="#1a1a2e", linewidth=1.5, alpha=0.85, label="Price")
+    ax_price.plot(x, prices, color="#c0392b", linewidth=1.5, alpha=0.85, label="Price")
     ax_price.fill_between(x, prices, alpha=0.05, color="#1a1a2e")
 
     # 标注交易
