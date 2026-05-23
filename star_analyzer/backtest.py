@@ -238,7 +238,8 @@ class BacktestEngine:
     def _compute_stats(self, result: BacktestResult) -> dict:
         trades = result.trades
         if not trades:
-            return {"total_trades": 0, "win_rate": 0, "total_pnl": 0, "sharpe": 0}
+            return {"total_trades": 0, "win_rate": 0, "total_pnl": 0, "total_pnl_pct": 0,
+                     "profit_factor": 0, "max_drawdown": 0, "sharpe": 0}
 
         wins = [t for t in trades if t.pnl > 0]
         losses = [t for t in trades if t.pnl <= 0]
