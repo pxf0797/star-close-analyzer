@@ -37,7 +37,7 @@ def build_interactive_chart(
 
     fig = make_subplots(
         rows=3, cols=1,
-        shared_xaxes=True,
+        shared_xaxes=False,
         vertical_spacing=0.05,
         row_heights=[0.45, 0.30, 0.25],
         subplot_titles=(title, "残差 & 贴合度", "权益曲线"),
@@ -209,8 +209,8 @@ def build_interactive_chart(
 
     # 跨面板联动 — 鼠标竖线光标 (3面板)
     for r in [1, 2, 3]:
-        fig.update_xaxes(spikemode="across", spikesnap="cursor", spikethickness=0.6,
-                          spikecolor="rgba(0,0,0,0.15)", row=r, col=1)
+        fig.update_xaxes(showspikes=True, spikemode="across+marker", spikesnap="cursor",
+                          spikethickness=0.8, spikecolor="rgba(100,100,100,0.3)", row=r, col=1)
     fig.update_layout(
         height=750,
         hovermode="x unified",
@@ -287,8 +287,8 @@ def build_trajectory_detail_plotly(
 
     fig.update_yaxes(range=[entry_price * 0.9, entry_price * 1.1], row=1, col=1)
     for r in [1, 2]:
-        fig.update_xaxes(spikemode="across", spikesnap="cursor", spikethickness=0.6,
-                          spikecolor="rgba(0,0,0,0.15)", row=r, col=1)
+        fig.update_xaxes(showspikes=True, spikemode="across+marker", spikesnap="cursor",
+                          spikethickness=0.8, spikecolor="rgba(100,100,100,0.3)", row=r, col=1)
     fig.update_layout(height=400, template="plotly_white", hovermode="x unified", spikedistance=-1)
     return fig
 
@@ -420,8 +420,8 @@ def build_replay_chart(prices: np.ndarray, result: BacktestResult, current_idx: 
     fig.update_yaxes(title_text="贴合度", range=[-0.05, 1.1], row=2, col=1, secondary_y=True)
 
     for r in [1, 2]:
-        fig.update_xaxes(spikemode="across", spikesnap="cursor", spikethickness=0.6,
-                          spikecolor="rgba(0,0,0,0.15)", row=r, col=1)
+        fig.update_xaxes(showspikes=True, spikemode="across+marker", spikesnap="cursor",
+                          spikethickness=0.8, spikecolor="rgba(100,100,100,0.3)", row=r, col=1)
     fig.update_layout(
         height=500,
         template="plotly_white",
